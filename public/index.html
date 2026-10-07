@@ -2,37 +2,119 @@
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Webnook Command Builder</title>
 <style>
-body{margin:0;background:#11131a;color:#f5f7fb;font:15px system-ui,sans-serif}.wrap{max-width:980px;margin:auto;padding:32px 18px}.card{background:#191c25;border:1px solid #2d3342;border-radius:16px;padding:18px;margin:16px 0}h1{margin:0 0 8px}label{display:block;color:#aeb6c5;font-size:13px;margin:10px 0 6px}input,select,textarea,button{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid #363d4e;background:#10131a;color:white;font:inherit}button{background:#6d5dfc;border:0;font-weight:700;cursor:pointer}.secondary{background:#2b3140}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.block{background:#141720;border:1px solid #353b4b;border-radius:14px;padding:14px;margin:12px 0}.head{display:flex;justify-content:space-between;align-items:center}.pill{background:#292e3c;padding:5px 8px;border-radius:99px;font-size:12px}.actions{display:flex;gap:8px;margin-top:12px}.actions button{width:auto}.muted{color:#9da5b4}.status{color:#8ee0b0;margin-top:10px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+body{margin:0;background:#0f1117;color:#f5f7fb;font:15px system-ui,sans-serif}.wrap{max-width:1050px;margin:auto;padding:30px 18px}.card{background:#181b24;border:1px solid #2d3342;border-radius:16px;padding:18px;margin:16px 0}h1{margin:0 0 8px}.muted{color:#9da5b4}label{display:block;color:#aeb6c5;font-size:13px;margin:10px 0 6px}input,select,textarea,button{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid #363d4e;background:#10131a;color:white;font:inherit}textarea{min-height:80px;resize:vertical}button{background:#6d5dfc;border:0;font-weight:700;cursor:pointer}.secondary{background:#2b3140}.danger{background:#482936}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.block{background:#13161e;border:1px solid #353b4b;border-radius:14px;padding:14px;margin:12px 0}.head{display:flex;justify-content:space-between;align-items:center;gap:10px}.pill{background:#292e3c;padding:5px 8px;border-radius:99px;font-size:12px}.actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.actions button{width:auto}.toolbar{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:14px}.code{background:#0b0d12;border:1px solid #303645;border-radius:12px;padding:14px;white-space:pre-wrap;overflow:auto;font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px}.status{color:#8ee0b0;margin-top:10px}.small{font-size:12px}@media(max-width:800px){.grid,.toolbar{grid-template-columns:1fr 1fr}}@media(max-width:500px){.grid,.toolbar{grid-template-columns:1fr}}
 </style></head>
 <body><div class="wrap">
-<h1>Webnook Command Builder</h1><div class="muted">Make simple blocks such as “when someone says hello → reply hello”.</div>
-<div class="card"><div class="grid">
-<div><label>Webnook URL</label><input id="webnookUrl" placeholder="https://your-webnook.example"></div>
-<div><label>Bot ID</label><input id="botId" value="main"></div>
-</div><div class="actions"><button onclick="loadRules()">Load blocks</button><button class="secondary" onclick="copyEndpoint()">Copy command endpoint</button></div><div id="status" class="status"></div></div>
-<div class="card"><div class="head"><div><b>Blocks</b><div class="muted">Add a message trigger or a scheduled message.</div></div><button style="width:auto" onclick="addBlock('message')">+ Message</button></div><div id="blocks"></div>
-<div class="actions"><button onclick="saveRules()">Save blocks</button><button class="secondary" onclick="addBlock('schedule')">+ Time block</button></div></div>
-<div class="card"><b>Webhook</b><p class="muted">Your Render endpoint is <code id="endpoint"></code>. POST JSON like <code>{"message":"hello","user":"Sam"}</code>.</p></div>
+<h1>Webnook Command Builder</h1>
+<div class="muted">Build your bot with blocks: message replies, commands, welcome messages, keywords, and scheduled messages.</div>
+
+<div class="card">
+  <div class="grid">
+    <div><label>Bot URL / Render URL</label><input id="botUrl" placeholder="https://your-app.onrender.com" oninput="refreshEndpoint()"></div>
+    <div><label>Bot ID</label><input id="botId" value="main" oninput="refreshEndpoint()"></div>
+  </div>
+  <label>Google Chat webhook URL <span class="small">(optional; keep this private)</span></label>
+  <input id="chatUrl" type="password" placeholder="Paste your Google Chat webhook URL">
+  <div class="actions">
+    <button onclick="startCode()">▶ Start Code</button>
+    <button class="secondary" onclick="testHello()">Test “hello”</button>
+    <button class="secondary" onclick="loadRules()">Load blocks</button>
+    <button class="secondary" onclick="copyEndpoint()">Copy bot URL</button>
+  </div>
+  <div id="status" class="status"></div>
 </div>
+
+<div class="card">
+  <div class="head">
+    <div><b>Blocks</b><div class="muted">Choose a block type and fill in what the bot should do.</div></div>
+  </div>
+  <div class="toolbar">
+    <button onclick="addBlock('message')">+ Message</button>
+    <button onclick="addBlock('command')">+ Command</button>
+    <button onclick="addBlock('keyword')">+ Keyword</button>
+    <button onclick="addBlock('welcome')">+ Welcome</button>
+    <button onclick="addBlock('schedule')">+ Time</button>
+  </div>
+  <div id="blocks"></div>
+  <div class="actions">
+    <button onclick="saveRules()">Save blocks</button>
+    <button class="secondary" onclick="clearBlocks()">Clear all</button>
+  </div>
+</div>
+
+<div class="card">
+  <b>Bot URL</b>
+  <p class="muted">Use this URL as the endpoint your Webnook or bot system sends messages to:</p>
+  <div class="code" id="endpoint"></div>
+  <p class="muted small">Example incoming JSON: {"message":"hello","user":"Sam"}</p>
+</div>
+
+<div class="card" id="codeCard" style="display:none">
+  <div class="head"><b>Starter code</b><button class="secondary" style="width:auto" onclick="copyCode()">Copy code</button></div>
+  <p class="muted">This sends a test “hello” message to your bot.</p>
+  <pre class="code" id="starterCode"></pre>
+</div>
+</div>
+
 <script>
 var blocks=[];
 function uid(){return Math.random().toString(36).slice(2,9)}
-function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
-function addBlock(type){blocks.push({id:uid(),type:type,trigger:type==="message"?"hello":"",match:"exact",reply:type==="message"?"hello":"",time:"01:30"});render()}
+function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function addBlock(type){
+  var b={id:uid(),type:type,trigger:"hello",match:"exact",reply:"hello",time:"01:30",command:"hello",keyword:"hello",welcome:"Hello {user}!"};
+  if(type==="command") b.trigger="";
+  if(type==="keyword") b.trigger="";
+  if(type==="welcome") b.trigger="";
+  if(type==="schedule") b.trigger="";
+  blocks.push(b); render();
+}
 function update(i,k,v){blocks[i][k]=v}
 function removeBlock(i){blocks.splice(i,1);render()}
+function clearBlocks(){if(confirm("Clear every block?")){blocks=[];render()}}
+function blockEditor(b,i){
+  var head='<div class="head"><span class="pill">'+({message:"WHEN MESSAGE",command:"COMMAND",keyword:"KEYWORD",welcome:"WELCOME",schedule:"AT TIME"}[b.type]||"BLOCK")+'</span><button class="danger" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div>';
+  if(b.type==="message") return head+'<div class="grid"><div><label>When someone says</label><input value="'+esc(b.trigger)+'" oninput="update('+i+',\'trigger\',this.value)"></div><div><label>Match</label><select onchange="update('+i+',\'match\',this.value)"><option value="exact" '+(b.match==="exact"?"selected":"")+'>Exactly</option><option value="contains" '+(b.match==="contains"?"selected":"")+'>Contains</option></select></div></div><label>Reply with</label><textarea oninput="update('+i+',\'reply\',this.value)">'+esc(b.reply)+'</textarea>';
+  if(b.type==="command") return head+'<div class="grid"><div><label>Command name</label><input value="'+esc(b.command)+'" oninput="update('+i+',\'command\',this.value);update('+i+',\'trigger\',this.value)"></div><div><label>Reply</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Example: /hello → Hello there!</div>';
+  if(b.type==="keyword") return head+'<div class="grid"><div><label>Keyword</label><input value="'+esc(b.keyword)+'" oninput="update('+i+',\'keyword\',this.value);update('+i+',\'trigger\',this.value)"></div><div><label>Reply</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Replies when the keyword appears anywhere in a message.</div>';
+  if(b.type==="welcome") return head+'<label>Welcome message</label><textarea oninput="update('+i+',\'reply\',this.value)">'+esc(b.reply||b.welcome)+'</textarea><div class="muted small">Use {user} to insert the sender name.</div>';
+  return head+'<div class="grid"><div><label>Time</label><input type="time" value="'+esc(b.time)+'" onchange="update('+i+',\'time\',this.value)"></div><div><label>Say</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">24-hour time. Example: 01:30.</div>';
+}
 function render(){
  var root=document.getElementById("blocks");
- if(!blocks.length){root.innerHTML='<div class="muted">No blocks yet.</div>';return}
- root.innerHTML=blocks.map(function(b,i){
-  if(b.type==="message") return '<div class="block"><div class="head"><span class="pill">WHEN MESSAGE</span><button class="secondary" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div><div class="grid"><div><label>When someone says</label><input value="'+esc(b.trigger)+'" oninput="update('+i+',\'trigger\',this.value)"></div><div><label>Match</label><select onchange="update('+i+',\'match\',this.value)"><option value="exact" '+(b.match==="exact"?"selected":"")+'>Exactly</option><option value="contains" '+(b.match==="contains"?"selected":"")+'>Contains</option></select></div></div><label>Reply with</label><textarea oninput="update('+i+',\'reply\',this.value)">'+esc(b.reply)+'</textarea></div>';
-  return '<div class="block"><div class="head"><span class="pill">AT TIME</span><button class="secondary" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div><div class="grid"><div><label>Time</label><input type="time" value="'+esc(b.time)+'" onchange="update('+i+',\'time\',this.value)"></div><div><label>Say</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div></div>';
- }).join("");
+ if(!blocks.length){root.innerHTML='<div class="muted" style="padding:18px 0">No blocks yet. Try “+ Message” and make <b>hello → hello</b>.</div>';return}
+ root.innerHTML=blocks.map(function(b,i){return '<div class="block">'+blockEditor(b,i)+'</div>'}).join("");
 }
 function bot(){return document.getElementById("botId").value.trim()||"main"}
-async function loadRules(){var r=await fetch("/api/rules/"+encodeURIComponent(bot()));var d=await r.json();blocks=d.rules||[];render();status("Loaded "+blocks.length+" block(s).")}
-async function saveRules(){var r=await fetch("/api/rules/"+encodeURIComponent(bot()),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({rules:blocks})});var d=await r.json();blocks=d.rules||blocks;render();status("Saved "+blocks.length+" block(s).")}
-function copyEndpoint(){var u=location.origin+"/webhook/"+encodeURIComponent(bot());navigator.clipboard&&navigator.clipboard.writeText(u);status("Endpoint: "+u)}
-function status(s){document.getElementById("status").textContent=s;document.getElementById("endpoint").textContent=location.origin+"/webhook/"+encodeURIComponent(bot())}
-document.getElementById("botId").addEventListener("input",function(){status("")});addBlock("message");
+function baseUrl(){
+ var raw=document.getElementById("botUrl").value.trim().replace(/\/$/,"");
+ return raw||location.origin;
+}
+function endpoint(){return baseUrl()+"/webhook/"+encodeURIComponent(bot())}
+function refreshEndpoint(){document.getElementById("endpoint").textContent=endpoint()}
+async function loadRules(){
+ try{var r=await fetch("/api/rules/"+encodeURIComponent(bot()));var d=await r.json();blocks=d.rules||[];render();status("Loaded "+blocks.length+" block(s).")}
+ catch(e){status("Could not load blocks.")}
+}
+async function saveRules(){
+ try{var r=await fetch("/api/rules/"+encodeURIComponent(bot()),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({rules:blocks})});var d=await r.json();blocks=d.rules||blocks;render();status("Saved "+blocks.length+" block(s).")}
+ catch(e){status("Could not save blocks.")}
+}
+function copyEndpoint(){navigator.clipboard&&navigator.clipboard.writeText(endpoint());status("Bot URL copied.")}
+async function testHello(){
+ var url=document.getElementById("chatUrl").value.trim();
+ if(!url){status("Add your Google Chat webhook URL first.");return}
+ try{
+   var r=await fetch("/api/test-google-chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:url,text:"hello"})});
+   var d=await r.json();status(d.ok?"Sent “hello” to Google Chat.":("Test failed: "+(d.error||"unknown error")));
+ }catch(e){status("Test failed.")}
+}
+function startCode(){
+ var code='const BOT_URL = "'+endpoint().replace(/"/g,'\\\"')+'";\n\nasync function sendMessage(message, user = "someone") {\n  const response = await fetch(BOT_URL, {\n    method: "POST",\n    headers: { "Content-Type": "application/json" },\n    body: JSON.stringify({ message, user })\n  });\n\n  return response.json();\n}\n\n// Try the hello block\nsendMessage("hello", "Sam");';
+ document.getElementById("starterCode").textContent=code;
+ document.getElementById("codeCard").style.display="block";
+ status("Starter code created.");
+}
+function copyCode(){navigator.clipboard&&navigator.clipboard.writeText(document.getElementById("starterCode").textContent);status("Starter code copied.")}
+function status(s){document.getElementById("status").textContent=s;refreshEndpoint()}
+addBlock("message");render();refreshEndpoint();
 </script></body></html>
