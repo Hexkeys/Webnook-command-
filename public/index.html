@@ -16,7 +16,7 @@ body{margin:0;background:#0f1117;color:#f5f7fb;font:15px system-ui,sans-serif}.w
   <label>Google Chat webhook URL <span class="small">(optional; keep this private)</span></label>
   <input id="chatUrl" type="password" placeholder="Paste your Google Chat webhook URL">
   <div class="actions">
-    <button onclick="startCode()">▶ Start Code</button>
+    <button onclick="startCode()">▶ Run Code</button>
     <button class="secondary" onclick="testHello()">Test “hello”</button>
     <button class="secondary" onclick="loadRules()">Load blocks</button>
     <button class="secondary" onclick="copyEndpoint()">Copy bot URL</button>
@@ -38,6 +38,7 @@ body{margin:0;background:#0f1117;color:#f5f7fb;font:15px system-ui,sans-serif}.w
   <div id="blocks"></div>
   <div class="actions">
     <button onclick="saveRules()">Save blocks</button>
+    <button onclick="runSelected()">▶ Run message</button>
     <button class="secondary" onclick="clearBlocks()">Clear all</button>
   </div>
 </div>
@@ -72,7 +73,8 @@ function update(i,k,v){blocks[i][k]=v}
 function removeBlock(i){blocks.splice(i,1);render()}
 function clearBlocks(){if(confirm("Clear every block?")){blocks=[];render()}}
 function blockEditor(b,i){
-  var head='<div class="head"><span class="pill">'+({message:"WHEN MESSAGE",command:"COMMAND",keyword:"KEYWORD",welcome:"WELCOME",schedule:"AT TIME"}[b.type]||"BLOCK")+'</span><button class="danger" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div>';
+  var run=b.type==="message" ? '<button class="secondary" style="width:auto" onclick="runBlock('+i+')">▶ Run</button>' : '';
+  var head='<div class="head"><span class="pill">'+({message:"WHEN MESSAGE",command:"COMMAND",keyword:"KEYWORD",welcome:"WELCOME",schedule:"AT TIME"}[b.type]||"BLOCK")+'</span><div class="actions" style="margin:0">'+run+'<button class="danger" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div></div>';
   if(b.type==="message") return head+'<div class="grid"><div><label>When someone says</label><input value="'+esc(b.trigger)+'" oninput="update('+i+',\'trigger\',this.value)"></div><div><label>Match</label><select onchange="update('+i+',\'match\',this.value)"><option value="exact" '+(b.match==="exact"?"selected":"")+'>Exactly</option><option value="contains" '+(b.match==="contains"?"selected":"")+'>Contains</option></select></div></div><label>Reply with</label><textarea oninput="update('+i+',\'reply\',this.value)">'+esc(b.reply)+'</textarea>';
   if(b.type==="command") return head+'<div class="grid"><div><label>Command name</label><input value="'+esc(b.command)+'" oninput="update('+i+',\'command\',this.value);update('+i+',\'trigger\',this.value)"></div><div><label>Reply</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Example: /hello → Hello there!</div>';
   if(b.type==="keyword") return head+'<div class="grid"><div><label>Keyword</label><input value="'+esc(b.keyword)+'" oninput="update('+i+',\'keyword\',this.value);update('+i+',\'trigger\',this.value)"></div><div><label>Reply</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Replies when the keyword appears anywhere in a message.</div>';
@@ -99,6 +101,25 @@ async function saveRules(){
  try{var r=await fetch("/api/rules/"+encodeURIComponent(bot()),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({rules:blocks})});var d=await r.json();blocks=d.rules||blocks;render();status("Saved "+blocks.length+" block(s).")}
  catch(e){status("Could not save blocks.")}
 }
+async function runBlock(i){
+ var b=blocks[i];
+ if(!b || b.type!=="message"){status("Select a message block first.");return}
+ var trigger=String(b.trigger||"").trim();
+ if(!trigger){status("Put the text to trigger this block first.");return}
+ status("Running message...");
+ try{
+   await saveRules();
+   var r=await fetch("/webhook/"+encodeURIComponent(bot()),{
+     method:"POST",
+     headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({message:trigger,user:"You",sendToGoogleChat:false})
+   });
+   var d=await r.json();
+   if(!r.ok || !d.ok){status("Run failed: "+(d.error||"server error"));return}
+   status("Bot reply: "+((d.replies&&d.replies[0])||"No matching reply"));
+ }catch(e){status("Run failed. Check that the service is deployed.")}
+}
+function runSelected(){runBlock(0)}
 function copyEndpoint(){navigator.clipboard&&navigator.clipboard.writeText(endpoint());status("Bot URL copied.")}
 async function testHello(){
  var url=document.getElementById("chatUrl").value.trim();
