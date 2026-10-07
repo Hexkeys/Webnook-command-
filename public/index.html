@@ -87,7 +87,7 @@ function update(i,k,v){blocks[i][k]=v}
 function removeBlock(i){blocks.splice(i,1);render()}
 function clearBlocks(){if(confirm("Clear every block?")){blocks=[];render()}}
 function blockEditor(b,i){
-  var run='<button class="secondary" style="width:auto" onclick="testBlock('+i+')">▶ Run/Test</button>';
+  var run='<button id="runbtn-'+i+'" class="secondary" style="width:auto" onclick="testBlock('+i+')">▶ Run/Test</button>';
   var head='<div class="head"><span class="pill">'+({message:"WHEN MESSAGE",autoreply:"AUTO REPLY",command:"COMMAND",keyword:"KEYWORD",welcome:"WELCOME",schedule:"AT TIME"}[b.type]||"BLOCK")+'</span><div class="actions" style="margin:0">'+run+'<button class="danger" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div></div>';
   if(b.type==="autoreply") return head+'<div class="grid"><div><label>When someone says</label><input value="'+esc(b.trigger)+'" oninput="update('+i+',\'trigger\',this.value)"></div><div><label>Reply with</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Automatically replies whenever this message is received.</div>';
   if(b.type==="message") return head+'<div class="grid"><div><label>When someone says</label><input value="'+esc(b.trigger)+'" oninput="update('+i+',\'trigger\',this.value)"></div><div><label>Match</label><select onchange="update('+i+',\'match\',this.value)"><option value="exact" '+(b.match==="exact"?"selected":"")+'>Exactly</option><option value="contains" '+(b.match==="contains"?"selected":"")+'>Contains</option></select></div></div><label>Reply with</label><textarea oninput="update('+i+',\'reply\',this.value)">'+esc(b.reply)+'</textarea>';
@@ -137,7 +137,10 @@ async function runBlock(i){
 function runSelected(){testBlock(0)}
 async function testBlock(i){
  var b=blocks[i];
- if(!b){status("Add an automation block first.");return}
+ var btn=document.getElementById("runbtn-"+i);
+ var oldLabel=btn?btn.textContent:"▶ Run/Test";
+ if(btn){btn.disabled=true;btn.textContent="Running...";}
+ if(!b){if(btn){btn.disabled=false;btn.textContent=oldLabel;}status("Add an automation block first.");return}
  status("Testing "+String(b.type||"block")+"...");
  try{
    if(b.type==="message" || b.type==="autoreply" || b.type==="keyword" || b.type==="command"){
@@ -162,6 +165,7 @@ async function testBlock(i){
    }
    status("Test result: "+String(b.reply||"Ready."));
  }catch(e){status("Test failed. Check that the service is deployed.")}
+ finally {if(btn){btn.disabled=false;btn.textContent=oldLabel;}}
 }
 function copyEndpoint(){navigator.clipboard&&navigator.clipboard.writeText(endpoint());status("Bot URL copied.")}
 async function testHello(){
