@@ -141,15 +141,48 @@ async function runSelected(){
  try{await testBlock(0);}
  finally{if(btn){btn.disabled=false;btn.textContent=old;}}
 }
+async function startWorkflow(i){
+ var b=blocks[i];
+ var btn=document.getElementById("runbtn-"+i);
+ if(!b){status("Add a message block first.");return}
+ if(b.type!=="message"){status("Run a Message block to start a waiting flow.");return}
+ if(!String(b.trigger||"").trim()){status("Put the phrase to wait for first.");return}
+ try{
+   await saveRules();
+   var r=await fetch("/api/workflow/"+encodeURIComponent(bot())+"/start",{
+     method:"POST",headers:{"Content-Type":"application/json"},
+     body:JSON.stringify({user:"You",index:i})
+   });
+   var d=await r.json();
+   if(!r.ok||!d.ok){status("Could not start the workflow.");return}
+   if(btn){btn.disabled=true;btn.textContent="Running...";}
+   status("Running — waiting for someone to say: "+d.waitingFor);
+   pollWorkflow(i);
+ }catch(e){status("Could not start the workflow. Check that the service is deployed.")}
+}
+async function pollWorkflow(i){
+ try{
+   var r=await fetch("/api/workflow/"+encodeURIComponent(bot())+"/status?user=You");
+   var d=await r.json();
+   if(d.running){
+     status("Running — waiting for: "+(d.waitingFor||"the next block"));
+     setTimeout(function(){pollWorkflow(i)},1000);
+     return;
+   }
+   status(d.completed?"Workflow completed.":"Workflow stopped.");
+   render();
+ }catch(e){setTimeout(function(){pollWorkflow(i)},1500)}
+}
 async function testBlock(i){
  var b=blocks[i];
+ if(!b){status("Add an automation block first.");return}
+ if(b.type==="message"){return startWorkflow(i)}
  var btn=document.getElementById("runbtn-"+i);
  var oldLabel=btn?btn.textContent:"▶ Run/Test";
  if(btn){btn.disabled=true;btn.textContent="Running...";}
- if(!b){if(btn){btn.disabled=false;btn.textContent=oldLabel;}status("Add an automation block first.");return}
  status("Testing "+String(b.type||"block")+"...");
  try{
-   if(b.type==="message" || b.type==="autoreply" || b.type==="keyword" || b.type==="command"){
+   if(b.type==="autoreply" || b.type==="keyword" || b.type==="command"){
      var trigger=String(b.trigger||b.keyword||b.command||"").trim();
      if(!trigger){status("Add a trigger first.");return}
      await saveRules();
