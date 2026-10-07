@@ -80,21 +80,28 @@ app.post("/webhook/:botId",async(req,res)=>{
 app.post("/google-chat/:botId",async(req,res)=>{
   const botId=req.params.botId;
   const event=req.body||{};
-  if(event.type && event.type!=="MESSAGE" && event.type!=="ADDED_TO_SPACE") return res.json({});
+  const chatEvent=event.chat||null;
+  const messageObj=event.message || chatEvent?.messagePayload?.message || null;
+  const eventType=String(event.type||chatEvent?.type||"");
+  if(eventType && !["MESSAGE","ADDED_TO_SPACE"].includes(eventType)) return res.json({});
+
   const message=String(
-    event.message?.text ||
-    event.chat?.messagePayload?.message?.text ||
+    messageObj?.argumentText ||
+    messageObj?.text ||
     ""
   ).trim();
-  const user=String(
-    event.user?.name ||
-    event.chat?.user?.name ||
-    event.user?.displayName ||
-    event.chat?.user?.displayName ||
-    "google-chat-user"
-  );
+  const sender=messageObj?.sender || event.user || chatEvent?.user || {};
+  const user=String(sender.name || sender.displayName || "google-chat-user");
+  const displayName=String(sender.displayName || "there");
+
   if(!message){
-    if(event.type==="ADDED_TO_SPACE") return res.json({text:"Hi! My automation is ready."});
+    if(eventType==="ADDED_TO_SPACE"){
+      const simple={text:"Hi! My Webnook automation is ready."};
+      if(chatEvent?.messagePayload) return res.json({
+        hostAppDataAction:{chatDataAction:{createMessageAction:{message:simple}}}
+      });
+      return res.json(simple);
+    }
     return res.json({});
   }
 
@@ -109,7 +116,7 @@ app.post("/google-chat/:botId",async(req,res)=>{
     if(rule.type==="message" || rule.type==="command" || rule.type==="keyword"){
       waitingFor=String(rule.trigger||rule.keyword||rule.command||"");
       if(!matchesRule(rule,message)) break;
-      const reply=String(rule.reply||"").replaceAll("{user}",String(event.user?.displayName||event.chat?.user?.displayName||"there"));
+      const reply=String(rule.reply||"").replaceAll("{user}",displayName);
       if(reply) replies.push(reply);
       pos++;
       waitingFor=null;
@@ -120,7 +127,7 @@ app.post("/google-chat/:botId",async(req,res)=>{
 
   for(const rule of config){
     if(rule.type==="autoreply" && matchesRule(rule,message)){
-      const reply=String(rule.reply||"").replaceAll("{user}",String(event.user?.displayName||event.chat?.user?.displayName||"there"));
+      const reply=String(rule.reply||"").replaceAll("{user}",displayName);
       if(reply) replies.push(reply);
     }
   }
@@ -135,7 +142,13 @@ app.post("/google-chat/:botId",async(req,res)=>{
   });
 
   if(!replies.length) return res.json({});
-  return res.json({text:replies.join("\n")});
+  const simple={text:replies.join("\n")};
+  if(chatEvent?.messagePayload){
+    return res.json({
+      hostAppDataAction:{chatDataAction:{createMessageAction:{message:simple}}}
+    });
+  }
+  return res.json(simple);
 });
 
 app.post("/api/workflow/:botId/start",async(req,res)=>{
