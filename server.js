@@ -27,11 +27,10 @@ app.post("/webhook/:botId",async(req,res)=>{
     const trigger=norm(r.trigger||r.keyword||r.command);
     if(!trigger) continue;
     const matches=r.type==="keyword" ? a.includes(trigger) :
-      (r.type==="command" ? a===trigger.replace(/^\\//,"") || a===("/"+trigger.replace(/^\\//,"")) :
+      (r.type==="command" ? a===trigger.replace(/^\/+$/,"") || a===("/"+trigger.replace(/^\/+$/,"")) :
       (r.type==="message" || r.type==="autoreply") ? (r.match==="contains"?a.includes(trigger):a===trigger) : false);
     if(matches) replies.push(String(r.reply||"").replaceAll("{user}",user));
   }
-  const sent=[];
   // Return the bot result immediately. Sending to Google Chat happens in the background,
   // so a slow Google Chat webhook cannot make the bot webhook feel slow.
   if(req.body?.sendToGoogleChat!==false && replies.length){
@@ -66,7 +65,9 @@ app.put("/api/rules/:botId",(req,res)=>{
     command:String(r.command||""),
     keyword:String(r.keyword||""),
     reply:String(r.reply||r.welcome||""),
-    time:String(r.time||"01:30")
+    time:String(r.time||"01:30"),
+    days:String(r.days||"everyday"),
+    enabled:r.enabled!==false
   }));
   rules.set(req.params.botId,clean);
   res.json({ok:true,rules:clean});
@@ -77,7 +78,7 @@ async function runSchedules(){
   const day=["sun","mon","tue","wed","thu","fri","sat"][now.getDay()];
   for(const [botId,config] of rules){
     for(const r of config){
-      if(r.type!=="schedule" || String(r.time||"")!==hhmm) continue;
+      if(r.type!=="schedule" || r.enabled===false || String(r.time||"")!==hhmm) continue;
       const days=String(r.days||"everyday").toLowerCase();
       if(days!=="everyday" && days!=="daily" && !days.split(",").map(x=>x.trim()).includes(day)) continue;
       const key=botId+"|"+r.id+"|"+now.toISOString().slice(0,10)+"|"+hhmm;
