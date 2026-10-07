@@ -27,7 +27,7 @@ app.post("/webhook/:botId",async(req,res)=>{
     const trigger=norm(r.trigger||r.keyword||r.command);
     if(!trigger) continue;
     const matches=r.type==="keyword" ? a.includes(trigger) :
-      (r.type==="command" ? a===trigger.replace(/^\/+$/,"") || a===("/"+trigger.replace(/^\/+$/,"")) :
+      (r.type==="command" ? a===trigger.replace(/^\//,"") || a===("/"+trigger.replace(/^\/+$/,"")) :
       (r.type==="message" || r.type==="autoreply") ? (r.match==="contains"?a.includes(trigger):a===trigger) : false);
     if(matches) replies.push(String(r.reply||"").replaceAll("{user}",user));
   }
