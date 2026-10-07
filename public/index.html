@@ -94,7 +94,7 @@ function blockEditor(b,i){
   if(b.type==="command") return head+'<div class="grid"><div><label>Command name</label><input value="'+esc(b.command)+'" oninput="update('+i+',\'command\',this.value);update('+i+',\'trigger\',this.value)"></div><div><label>Reply</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Example: /hello → Hello there!</div>';
   if(b.type==="keyword") return head+'<div class="grid"><div><label>Keyword</label><input value="'+esc(b.keyword)+'" oninput="update('+i+',\'keyword\',this.value);update('+i+',\'trigger\',this.value)"></div><div><label>Reply</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Replies when the keyword appears anywhere in a message.</div>';
   if(b.type==="welcome") return head+'<label>Welcome message</label><textarea oninput="update('+i+',\'reply\',this.value)">'+esc(b.reply||b.welcome)+'</textarea><div class="muted small">Use {user} to insert the sender name.</div>';
-  return head+'<div class="grid"><div><label>Time</label><input type="time" value="'+esc(b.time)+'" onchange="update('+i+',\'time\',this.value)"></div><div><label>Say</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">24-hour time. Example: 01:30.</div>';
+  return head+'<div class="grid"><div><label>Time</label><input type="time" value="'+esc(b.time)+'" onchange="update('+i+',\'time\',this.value)"></div><div><label>Say</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><label>Days</label><select onchange="update('+i+',\'days\',this.value)"><option value="everyday" '+(b.days==="everyday"?"selected":"")+'>Every day</option><option value="mon,wed,fri" '+(b.days==="mon,wed,fri"?"selected":"")+'>Mon, Wed, Fri</option><option value="sat,sun" '+(b.days==="sat,sun"?"selected":"")+'>Saturday & Sunday</option></select><div class="muted small">The server checks scheduled automations every 30 seconds while it is running.</div>';
 }
 function render(){
  var root=document.getElementById("blocks");
@@ -113,7 +113,7 @@ async function loadRules(){
  catch(e){status("Could not load blocks.")}
 }
 async function saveRules(){
- try{var r=await fetch("/api/rules/"+encodeURIComponent(bot()),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({rules:blocks})});var d=await r.json();blocks=d.rules||blocks;render();status("Saved "+blocks.length+" block(s).")}
+ try{var r=await fetch("/api/rules/"+encodeURIComponent(bot()),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({rules:blocks,googleChatWebhook:document.getElementById("chatUrl").value.trim()})});var d=await r.json();blocks=d.rules||blocks;render();status("Saved "+blocks.length+" block(s).")}
  catch(e){status("Could not save blocks.")}
 }
 async function runBlock(i){
