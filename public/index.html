@@ -26,6 +26,19 @@ body{margin:0;background:#0f1117;color:#f5f7fb;font:15px system-ui,sans-serif}.w
 
 <div class="card">
   <div class="head">
+    <div><b>Automation</b><div class="muted">Build automatic actions and test them before you turn them on.</div></div>
+  </div>
+  <div class="toolbar">
+    <button onclick="addBlock('autoreply')">+ Auto Reply</button>
+    <button onclick="addBlock('keyword')">+ Keyword</button>
+    <button onclick="addBlock('welcome')">+ Welcome</button>
+    <button onclick="addBlock('schedule')">+ Time</button>
+    <button onclick="addBlock('schedule')">+ Schedule</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="head">
     <div><b>Blocks</b><div class="muted">Choose a block type and fill in what the bot should do.</div></div>
   </div>
   <div class="toolbar">
@@ -62,7 +75,8 @@ var blocks=[];
 function uid(){return Math.random().toString(36).slice(2,9)}
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 function addBlock(type){
-  var b={id:uid(),type:type,trigger:"hello",match:"exact",reply:"hello",time:"01:30",command:"hello",keyword:"hello",welcome:"Hello {user}!"};
+  var b={id:uid(),type:type,trigger:"hello",match:"exact",reply:"hello",time:"01:30",command:"hello",keyword:"hello",welcome:"Hello {user}!",days:"everyday",enabled:true};
+  if(type==="autoreply") b.trigger="hello";
   if(type==="command") b.trigger="";
   if(type==="keyword") b.trigger="";
   if(type==="welcome") b.trigger="";
@@ -73,8 +87,9 @@ function update(i,k,v){blocks[i][k]=v}
 function removeBlock(i){blocks.splice(i,1);render()}
 function clearBlocks(){if(confirm("Clear every block?")){blocks=[];render()}}
 function blockEditor(b,i){
-  var run=b.type==="message" ? '<button class="secondary" style="width:auto" onclick="runBlock('+i+')">▶ Run</button>' : '';
-  var head='<div class="head"><span class="pill">'+({message:"WHEN MESSAGE",command:"COMMAND",keyword:"KEYWORD",welcome:"WELCOME",schedule:"AT TIME"}[b.type]||"BLOCK")+'</span><div class="actions" style="margin:0">'+run+'<button class="danger" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div></div>';
+  var run='<button class="secondary" style="width:auto" onclick="testBlock('+i+')">▶ Run/Test</button>';
+  var head='<div class="head"><span class="pill">'+({message:"WHEN MESSAGE",autoreply:"AUTO REPLY",command:"COMMAND",keyword:"KEYWORD",welcome:"WELCOME",schedule:"AT TIME"}[b.type]||"BLOCK")+'</span><div class="actions" style="margin:0">'+run+'<button class="danger" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div></div>';
+  if(b.type==="autoreply") return head+'<div class="grid"><div><label>When someone says</label><input value="'+esc(b.trigger)+'" oninput="update('+i+',\'trigger\',this.value)"></div><div><label>Reply with</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Automatically replies whenever this message is received.</div>';
   if(b.type==="message") return head+'<div class="grid"><div><label>When someone says</label><input value="'+esc(b.trigger)+'" oninput="update('+i+',\'trigger\',this.value)"></div><div><label>Match</label><select onchange="update('+i+',\'match\',this.value)"><option value="exact" '+(b.match==="exact"?"selected":"")+'>Exactly</option><option value="contains" '+(b.match==="contains"?"selected":"")+'>Contains</option></select></div></div><label>Reply with</label><textarea oninput="update('+i+',\'reply\',this.value)">'+esc(b.reply)+'</textarea>';
   if(b.type==="command") return head+'<div class="grid"><div><label>Command name</label><input value="'+esc(b.command)+'" oninput="update('+i+',\'command\',this.value);update('+i+',\'trigger\',this.value)"></div><div><label>Reply</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Example: /hello → Hello there!</div>';
   if(b.type==="keyword") return head+'<div class="grid"><div><label>Keyword</label><input value="'+esc(b.keyword)+'" oninput="update('+i+',\'keyword\',this.value);update('+i+',\'trigger\',this.value)"></div><div><label>Reply</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div><div class="muted small">Replies when the keyword appears anywhere in a message.</div>';
@@ -119,7 +134,35 @@ async function runBlock(i){
    status("Bot reply: "+((d.replies&&d.replies[0])||"No matching reply"));
  }catch(e){status("Run failed. Check that the service is deployed.")}
 }
-function runSelected(){runBlock(0)}
+function runSelected(){testBlock(0)}
+async function testBlock(i){
+ var b=blocks[i];
+ if(!b){status("Add an automation block first.");return}
+ status("Testing "+String(b.type||"block")+"...");
+ try{
+   if(b.type==="message" || b.type==="autoreply" || b.type==="keyword" || b.type==="command"){
+     var trigger=String(b.trigger||b.keyword||b.command||"").trim();
+     if(!trigger){status("Add a trigger first.");return}
+     await saveRules();
+     var r=await fetch("/webhook/"+encodeURIComponent(bot()),{
+       method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({message:trigger,user:"You",sendToGoogleChat:false})
+     });
+     var d=await r.json();
+     status(d.ok ? "Test result: "+((d.replies&&d.replies[0])||"No reply matched.") : "Test failed: "+(d.error||"server error"));
+     return;
+   }
+   if(b.type==="welcome"){
+     status("Test result: "+String(b.reply||b.welcome||"Hello!").replaceAll("{user}","You"));
+     return;
+   }
+   if(b.type==="schedule"){
+     status("Test result: "+String(b.reply||"No message set.")+" (scheduled for "+String(b.time||"01:30")+")");
+     return;
+   }
+   status("Test result: "+String(b.reply||"Ready."));
+ }catch(e){status("Test failed. Check that the service is deployed.")}
+}
 function copyEndpoint(){navigator.clipboard&&navigator.clipboard.writeText(endpoint());status("Bot URL copied.")}
 async function testHello(){
  var url=document.getElementById("chatUrl").value.trim();
