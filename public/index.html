@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Webnook Command Builder</title>
+<style>
+body{margin:0;background:#11131a;color:#f5f7fb;font:15px system-ui,sans-serif}.wrap{max-width:980px;margin:auto;padding:32px 18px}.card{background:#191c25;border:1px solid #2d3342;border-radius:16px;padding:18px;margin:16px 0}h1{margin:0 0 8px}label{display:block;color:#aeb6c5;font-size:13px;margin:10px 0 6px}input,select,textarea,button{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid #363d4e;background:#10131a;color:white;font:inherit}button{background:#6d5dfc;border:0;font-weight:700;cursor:pointer}.secondary{background:#2b3140}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.block{background:#141720;border:1px solid #353b4b;border-radius:14px;padding:14px;margin:12px 0}.head{display:flex;justify-content:space-between;align-items:center}.pill{background:#292e3c;padding:5px 8px;border-radius:99px;font-size:12px}.actions{display:flex;gap:8px;margin-top:12px}.actions button{width:auto}.muted{color:#9da5b4}.status{color:#8ee0b0;margin-top:10px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body><div class="wrap">
+<h1>Webnook Command Builder</h1><div class="muted">Make simple blocks such as “when someone says hello → reply hello”.</div>
+<div class="card"><div class="grid">
+<div><label>Webnook URL</label><input id="webnookUrl" placeholder="https://your-webnook.example"></div>
+<div><label>Bot ID</label><input id="botId" value="main"></div>
+</div><div class="actions"><button onclick="loadRules()">Load blocks</button><button class="secondary" onclick="copyEndpoint()">Copy command endpoint</button></div><div id="status" class="status"></div></div>
+<div class="card"><div class="head"><div><b>Blocks</b><div class="muted">Add a message trigger or a scheduled message.</div></div><button style="width:auto" onclick="addBlock('message')">+ Message</button></div><div id="blocks"></div>
+<div class="actions"><button onclick="saveRules()">Save blocks</button><button class="secondary" onclick="addBlock('schedule')">+ Time block</button></div></div>
+<div class="card"><b>Webhook</b><p class="muted">Your Render endpoint is <code id="endpoint"></code>. POST JSON like <code>{"message":"hello","user":"Sam"}</code>.</p></div>
+</div>
+<script>
+var blocks=[];
+function uid(){return Math.random().toString(36).slice(2,9)}
+function esc(s){return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
+function addBlock(type){blocks.push({id:uid(),type:type,trigger:type==="message"?"hello":"",match:"exact",reply:type==="message"?"hello":"",time:"01:30"});render()}
+function update(i,k,v){blocks[i][k]=v}
+function removeBlock(i){blocks.splice(i,1);render()}
+function render(){
+ var root=document.getElementById("blocks");
+ if(!blocks.length){root.innerHTML='<div class="muted">No blocks yet.</div>';return}
+ root.innerHTML=blocks.map(function(b,i){
+  if(b.type==="message") return '<div class="block"><div class="head"><span class="pill">WHEN MESSAGE</span><button class="secondary" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div><div class="grid"><div><label>When someone says</label><input value="'+esc(b.trigger)+'" oninput="update('+i+',\'trigger\',this.value)"></div><div><label>Match</label><select onchange="update('+i+',\'match\',this.value)"><option value="exact" '+(b.match==="exact"?"selected":"")+'>Exactly</option><option value="contains" '+(b.match==="contains"?"selected":"")+'>Contains</option></select></div></div><label>Reply with</label><textarea oninput="update('+i+',\'reply\',this.value)">'+esc(b.reply)+'</textarea></div>';
+  return '<div class="block"><div class="head"><span class="pill">AT TIME</span><button class="secondary" style="width:auto" onclick="removeBlock('+i+')">Delete</button></div><div class="grid"><div><label>Time</label><input type="time" value="'+esc(b.time)+'" onchange="update('+i+',\'time\',this.value)"></div><div><label>Say</label><input value="'+esc(b.reply)+'" oninput="update('+i+',\'reply\',this.value)"></div></div></div>';
+ }).join("");
+}
+function bot(){return document.getElementById("botId").value.trim()||"main"}
+async function loadRules(){var r=await fetch("/api/rules/"+encodeURIComponent(bot()));var d=await r.json();blocks=d.rules||[];render();status("Loaded "+blocks.length+" block(s).")}
+async function saveRules(){var r=await fetch("/api/rules/"+encodeURIComponent(bot()),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({rules:blocks})});var d=await r.json();blocks=d.rules||blocks;render();status("Saved "+blocks.length+" block(s).")}
+function copyEndpoint(){var u=location.origin+"/webhook/"+encodeURIComponent(bot());navigator.clipboard&&navigator.clipboard.writeText(u);status("Endpoint: "+u)}
+function status(s){document.getElementById("status").textContent=s;document.getElementById("endpoint").textContent=location.origin+"/webhook/"+encodeURIComponent(bot())}
+document.getElementById("botId").addEventListener("input",function(){status("")});addBlock("message");
+</script></body></html>
