@@ -51,7 +51,7 @@ body{margin:0;background:#0f1117;color:#f5f7fb;font:15px system-ui,sans-serif}.w
   <div id="blocks"></div>
   <div class="actions">
     <button onclick="saveRules()">Save blocks</button>
-    <button onclick="runSelected()">▶ Run message</button>
+    <button id="runMainBtn" onclick="runSelected()">▶ Run message</button>
     <button class="secondary" onclick="clearBlocks()">Clear all</button>
   </div>
 </div>
@@ -134,7 +134,13 @@ async function runBlock(i){
    status("Bot reply: "+((d.replies&&d.replies[0])||"No matching reply"));
  }catch(e){status("Run failed. Check that the service is deployed.")}
 }
-function runSelected(){testBlock(0)}
+async function runSelected(){
+ var btn=document.getElementById("runMainBtn");
+ var old=btn?btn.textContent:"▶ Run message";
+ if(btn){btn.disabled=true;btn.textContent="Running...";}
+ try{await testBlock(0);}
+ finally{if(btn){btn.disabled=false;btn.textContent=old;}}
+}
 async function testBlock(i){
  var b=blocks[i];
  var btn=document.getElementById("runbtn-"+i);
