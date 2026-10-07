@@ -26,26 +26,40 @@ app.post("/webhook/:botId",async(req,res)=>{
     if(r.match==="contains"?a.includes(b):a===b) replies.push(String(r.reply||"").replaceAll("{user}",user));
   }
   const sent=[];
-  if(req.body?.sendToGoogleChat!==false){
-    for(const text of replies){
-      try { await sendGoogleChat(req.body?.googleChatWebhook, text); sent.push(text); }
-      catch(e){ return res.status(502).json({ok:false,replies,sent,error:e.message}); }
+  // Return the bot result immediately. Sending to Google Chat happens in the background,
+  // so a slow Google Chat webhook cannot make the bot webhook feel slow.
+  if(req.body?.sendToGoogleChat!==false && replies.length){
+    const chatUrl=String(req.body?.googleChatWebhook||"");
+    if(chatUrl){
+      Promise.all(replies.map(text=>sendGoogleChat(chatUrl,text)))
+        .catch(e=>console.error("Google Chat delivery failed:",e.message));
     }
   }
-  res.json({ok:true,replies,sent});
+  res.json({ok:true,replies});
 });
 
 app.post("/api/test-google-chat",async(req,res)=>{
-  try{
-    await sendGoogleChat(String(req.body?.url||""),String(req.body?.text||"Hello from Webnook Command Builder!"));
-    res.json({ok:true});
-  }catch(e){res.status(502).json({ok:false,error:e.message});}
+  const url=String(req.body?.url||"");
+  const text=String(req.body?.text||"Hello from Webnook Command Builder!");
+  if(!url) return res.status(400).json({ok:false,error:"Google Chat webhook URL is not configured."});
+  // A test should feel instant; delivery is handled in the background.
+  sendGoogleChat(url,text).catch(e=>console.error("Google Chat test failed:",e.message));
+  res.status(202).json({ok:true,queued:true});
 });
 
 app.get("/api/rules/:botId",(req,res)=>res.json({rules:rules.get(req.params.botId)||[]}));
 app.put("/api/rules/:botId",(req,res)=>{
   const list=Array.isArray(req.body?.rules)?req.body.rules:[];
-  const clean=list.map(r=>({id:String(r.id||id()),type:r.type==="schedule"?"schedule":"message",trigger:String(r.trigger||""),match:r.match==="contains"?"contains":"exact",reply:String(r.reply||""),time:String(r.time||"01:30")}));
+  const clean=list.map(r=>({
+    id:String(r.id||id()),
+    type:["message","command","keyword","welcome","schedule"].includes(r.type)?r.type:"message",
+    trigger:String(r.trigger||r.command||r.keyword||""),
+    match:r.match==="contains"?"contains":"exact",
+    command:String(r.command||""),
+    keyword:String(r.keyword||""),
+    reply:String(r.reply||r.welcome||""),
+    time:String(r.time||"01:30")
+  }));
   rules.set(req.params.botId,clean);
   res.json({ok:true,rules:clean});
 });
