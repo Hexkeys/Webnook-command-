@@ -5,6 +5,8 @@ const PORT=process.env.PORT||10000;
 app.use(express.json({limit:"256kb"}));
 app.use(express.static(path.join(__dirname,"public")));
 const rules=new Map();
+const chatWebhooks=new Map();
+const firedScheduleKeys=new Set();
 const norm=v=>String(v||"").trim().toLowerCase();
 const id=()=>Math.random().toString(36).slice(2,10);
 
@@ -21,15 +23,19 @@ app.post("/webhook/:botId",async(req,res)=>{
   const config=rules.get(botId)||[];
   const replies=[];
   for(const r of config){
-    if(r.type!=="message") continue;
-    const a=norm(message), b=norm(r.trigger);
-    if(r.match==="contains"?a.includes(b):a===b) replies.push(String(r.reply||"").replaceAll("{user}",user));
+    const a=norm(message);
+    const trigger=norm(r.trigger||r.keyword||r.command);
+    if(!trigger) continue;
+    const matches=r.type==="keyword" ? a.includes(trigger) :
+      (r.type==="command" ? a===trigger.replace(/^\\//,"") || a===("/"+trigger.replace(/^\\//,"")) :
+      (r.type==="message" || r.type==="autoreply") ? (r.match==="contains"?a.includes(trigger):a===trigger) : false);
+    if(matches) replies.push(String(r.reply||"").replaceAll("{user}",user));
   }
   const sent=[];
   // Return the bot result immediately. Sending to Google Chat happens in the background,
   // so a slow Google Chat webhook cannot make the bot webhook feel slow.
   if(req.body?.sendToGoogleChat!==false && replies.length){
-    const chatUrl=String(req.body?.googleChatWebhook||"");
+    const chatUrl=String(req.body?.googleChatWebhook||chatWebhooks.get(botId)||"");
     if(chatUrl){
       Promise.all(replies.map(text=>sendGoogleChat(chatUrl,text)))
         .catch(e=>console.error("Google Chat delivery failed:",e.message));
@@ -50,6 +56,8 @@ app.post("/api/test-google-chat",async(req,res)=>{
 app.get("/api/rules/:botId",(req,res)=>res.json({rules:rules.get(req.params.botId)||[]}));
 app.put("/api/rules/:botId",(req,res)=>{
   const list=Array.isArray(req.body?.rules)?req.body.rules:[];
+  const webhook=String(req.body?.googleChatWebhook||"");
+  if(webhook) chatWebhooks.set(req.params.botId,webhook);
   const clean=list.map(r=>({
     id:String(r.id||id()),
     type:["message","command","keyword","welcome","schedule"].includes(r.type)?r.type:"message",
@@ -63,6 +71,28 @@ app.put("/api/rules/:botId",(req,res)=>{
   rules.set(req.params.botId,clean);
   res.json({ok:true,rules:clean});
 });
+async function runSchedules(){
+  const now=new Date();
+  const hhmm=now.toTimeString().slice(0,5);
+  const day=["sun","mon","tue","wed","thu","fri","sat"][now.getDay()];
+  for(const [botId,config] of rules){
+    for(const r of config){
+      if(r.type!=="schedule" || String(r.time||"")!==hhmm) continue;
+      const days=String(r.days||"everyday").toLowerCase();
+      if(days!=="everyday" && days!=="daily" && !days.split(",").map(x=>x.trim()).includes(day)) continue;
+      const key=botId+"|"+r.id+"|"+now.toISOString().slice(0,10)+"|"+hhmm;
+      if(firedScheduleKeys.has(key)) continue;
+      firedScheduleKeys.add(key);
+      const text=String(r.reply||"").replaceAll("{user}","everyone");
+      const url=chatWebhooks.get(botId);
+      if(url && text) sendGoogleChat(url,text).catch(e=>console.error("Scheduled delivery failed:",e.message));
+      console.log("Scheduled automation:",botId,r.id,text);
+    }
+  }
+}
+setInterval(runSchedules,30000);
+runSchedules();
+
 app.get("/api/schedule/:botId",(req,res)=>{
   const time=String(req.query.time||new Date().toTimeString().slice(0,5));
   const due=(rules.get(req.params.botId)||[]).filter(r=>r.type==="schedule"&&r.time===time).map(r=>({id:r.id,reply:r.reply}));
