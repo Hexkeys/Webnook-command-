@@ -61,6 +61,11 @@ body{margin:0;background:#0f1117;color:#f5f7fb;font:15px system-ui,sans-serif}.w
   <p class="muted">Use this URL as the endpoint your Webnook or bot system sends messages to:</p>
   <div class="code" id="endpoint"></div>
   <p class="muted small">Example incoming JSON: {"message":"hello","user":"Sam"}</p>
+  <hr style="border:0;border-top:1px solid #2d3342;margin:16px 0">
+  <b>Google Chat app endpoint</b>
+  <p class="muted">Put this URL in Google Chat API → Configuration → Connection settings → HTTP endpoint URL.</p>
+  <div class="code" id="googleChatEndpoint"></div>
+  <div class="actions"><button class="secondary" style="width:auto" onclick="copyGoogleChatEndpoint()">Copy Google Chat endpoint</button></div>
 </div>
 
 <div class="card" id="codeCard" style="display:none">
@@ -107,7 +112,11 @@ function baseUrl(){
  return raw||location.origin;
 }
 function endpoint(){return baseUrl()+"/webhook/"+encodeURIComponent(bot())}
-function refreshEndpoint(){document.getElementById("endpoint").textContent=endpoint()}
+function googleChatEndpoint(){return baseUrl()+"/google-chat/"+encodeURIComponent(bot())}
+function refreshEndpoint(){
+ document.getElementById("endpoint").textContent=endpoint();
+ document.getElementById("googleChatEndpoint").textContent=googleChatEndpoint();
+}
 async function loadRules(){
  try{var r=await fetch("/api/rules/"+encodeURIComponent(bot()));var d=await r.json();blocks=d.rules||[];render();status("Loaded "+blocks.length+" block(s).")}
  catch(e){status("Could not load blocks.")}
@@ -207,6 +216,7 @@ async function testBlock(i){
  finally {if(btn){btn.disabled=false;btn.textContent=oldLabel;}}
 }
 function copyEndpoint(){navigator.clipboard&&navigator.clipboard.writeText(endpoint());status("Bot URL copied.")}
+function copyGoogleChatEndpoint(){navigator.clipboard&&navigator.clipboard.writeText(googleChatEndpoint());status("Google Chat endpoint copied.")}
 async function testHello(){
  var url=document.getElementById("chatUrl").value.trim();
  if(!url){status("Add your Google Chat webhook URL first.");return}
