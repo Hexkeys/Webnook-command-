@@ -7,8 +7,24 @@ app.use(express.static(path.join(__dirname,"public")));
 const rules=new Map();
 const chatWebhooks=new Map();
 const firedScheduleKeys=new Set();
+const workflowPositions=new Map();
+const workflowStatus=new Map();
 const norm=v=>String(v||"").trim().toLowerCase();
 const id=()=>Math.random().toString(36).slice(2,10);
+
+function workflowKey(botId,user){return botId+"|"+norm(user||"someone");}
+function matchesRule(r,message){
+  const a=norm(message);
+  const trigger=norm(r.trigger||r.keyword||r.command);
+  if(!trigger) return false;
+  if(r.type==="keyword") return a.includes(trigger);
+  if(r.type==="command"){
+    const clean=trigger.replace(/^\//,"");
+    return a===clean || a==="/"+clean;
+  }
+  if(r.type==="message" || r.type==="autoreply") return r.match==="contains" ? a.includes(trigger) : a===trigger;
+  return false;
+}
 
 async function sendGoogleChat(url,text){
   if(!url) throw new Error("Google Chat webhook URL is not configured.");
@@ -22,17 +38,35 @@ app.post("/webhook/:botId",async(req,res)=>{
   const botId=req.params.botId, message=String(req.body?.message||""), user=String(req.body?.user||"someone");
   const config=rules.get(botId)||[];
   const replies=[];
-  for(const r of config){
-    const a=norm(message);
-    const trigger=norm(r.trigger||r.keyword||r.command);
-    if(!trigger) continue;
-    const matches=r.type==="keyword" ? a.includes(trigger) :
-      (r.type==="command" ? a===trigger.replace(/^\//,"") || a===("/"+trigger.replace(/^\//,"")) :
-      (r.type==="message" || r.type==="autoreply") ? (r.match==="contains"?a.includes(trigger):a===trigger) : false);
-    if(matches) replies.push(String(r.reply||"").replaceAll("{user}",user));
+  const key=workflowKey(botId,user);
+  let pos=workflowPositions.has(key)?workflowPositions.get(key):0;
+  let waitingFor=null;
+
+  while(pos<config.length){
+    const r=config[pos];
+    if(r.type==="message" || r.type==="command" || r.type==="keyword"){
+      waitingFor=String(r.trigger||r.keyword||r.command||"");
+      if(!matchesRule(r,message)) break;
+      const reply=String(r.reply||"").replaceAll("{user}",user);
+      if(reply) replies.push(reply);
+      pos++;
+      waitingFor=null;
+      continue;
+    }
+    pos++;
   }
-  // Return the bot result immediately. Sending to Google Chat happens in the background,
-  // so a slow Google Chat webhook cannot make the bot webhook feel slow.
+
+  for(const r of config){
+    if(r.type==="autoreply" && matchesRule(r,message)){
+      const reply=String(r.reply||"").replaceAll("{user}",user);
+      if(reply) replies.push(reply);
+    }
+  }
+
+  workflowPositions.set(key,pos);
+  const running=pos<config.length && !!waitingFor;
+  workflowStatus.set(key,{running,index:running?pos:null,waitingFor:waitingFor||null,completed:!running&&pos>=config.length});
+
   if(req.body?.sendToGoogleChat!==false && replies.length){
     const chatUrl=String(req.body?.googleChatWebhook||chatWebhooks.get(botId)||"");
     if(chatUrl){
@@ -40,7 +74,28 @@ app.post("/webhook/:botId",async(req,res)=>{
         .catch(e=>console.error("Google Chat delivery failed:",e.message));
     }
   }
-  res.json({ok:true,replies});
+  res.json({ok:true,replies,running,index:running?pos:null,waitingFor:waitingFor||null,completed:!running&&pos>=config.length});
+});
+
+app.post("/api/workflow/:botId/start",async(req,res)=>{
+  const botId=req.params.botId;
+  const user=String(req.body?.user||"You");
+  const config=rules.get(botId)||[];
+  const requested=Number.isInteger(req.body?.index)?req.body.index:0;
+  const index=Math.max(0,Math.min(requested,Math.max(config.length-1,0)));
+  const key=workflowKey(botId,user);
+  const first=config[index];
+  workflowPositions.set(key,index);
+  workflowStatus.set(key,{running:!!first,index:!!first?index:null,waitingFor:first?String(first.trigger||first.keyword||first.command||""):null,completed:!first});
+  res.json({ok:true,running:!!first,index:!!first?index:null,waitingFor:first?String(first.trigger||first.keyword||first.command||""):null});
+});
+
+app.get("/api/workflow/:botId/status",(req,res)=>{
+  const user=String(req.query.user||"You");
+  const key=workflowKey(req.params.botId,user);
+  const s=workflowStatus.get(key);
+  if(!s) return res.json({ok:true,running:false,index:null,waitingFor:null,completed:false});
+  res.json({ok:true,...s});
 });
 
 app.post("/api/test-google-chat",async(req,res)=>{
