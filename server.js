@@ -77,6 +77,67 @@ app.post("/webhook/:botId",async(req,res)=>{
   res.json({ok:true,replies,running,index:running?pos:null,waitingFor:waitingFor||null,completed:!running&&pos>=config.length});
 });
 
+app.post("/google-chat/:botId",async(req,res)=>{
+  const botId=req.params.botId;
+  const event=req.body||{};
+  if(event.type && event.type!=="MESSAGE" && event.type!=="ADDED_TO_SPACE") return res.json({});
+  const message=String(
+    event.message?.text ||
+    event.chat?.messagePayload?.message?.text ||
+    ""
+  ).trim();
+  const user=String(
+    event.user?.name ||
+    event.chat?.user?.name ||
+    event.user?.displayName ||
+    event.chat?.user?.displayName ||
+    "google-chat-user"
+  );
+  if(!message){
+    if(event.type==="ADDED_TO_SPACE") return res.json({text:"Hi! My automation is ready."});
+    return res.json({});
+  }
+
+  const config=rules.get(botId)||[];
+  const key=workflowKey(botId,user);
+  let pos=workflowPositions.has(key)?workflowPositions.get(key):0;
+  const replies=[];
+  let waitingFor=null;
+
+  while(pos<config.length){
+    const rule=config[pos];
+    if(rule.type==="message" || rule.type==="command" || rule.type==="keyword"){
+      waitingFor=String(rule.trigger||rule.keyword||rule.command||"");
+      if(!matchesRule(rule,message)) break;
+      const reply=String(rule.reply||"").replaceAll("{user}",String(event.user?.displayName||event.chat?.user?.displayName||"there"));
+      if(reply) replies.push(reply);
+      pos++;
+      waitingFor=null;
+      continue;
+    }
+    pos++;
+  }
+
+  for(const rule of config){
+    if(rule.type==="autoreply" && matchesRule(rule,message)){
+      const reply=String(rule.reply||"").replaceAll("{user}",String(event.user?.displayName||event.chat?.user?.displayName||"there"));
+      if(reply) replies.push(reply);
+    }
+  }
+
+  workflowPositions.set(key,pos);
+  const running=pos<config.length && !!waitingFor;
+  workflowStatus.set(key,{
+    running,
+    index:running?pos:null,
+    waitingFor:waitingFor||null,
+    completed:!running&&pos>=config.length
+  });
+
+  if(!replies.length) return res.json({});
+  return res.json({text:replies.join("\n")});
+});
+
 app.post("/api/workflow/:botId/start",async(req,res)=>{
   const botId=req.params.botId;
   const user=String(req.body?.user||"You");
